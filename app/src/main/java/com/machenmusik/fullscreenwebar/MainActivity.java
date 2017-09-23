@@ -1,6 +1,7 @@
 package com.machenmusik.fullscreenwebar;
 
 import android.content.Context;
+import android.content.pm.ApplicationInfo;
 import android.graphics.Bitmap;
 import android.support.v7.app.AppCompatActivity;
 import android.os.Bundle;
@@ -104,6 +105,10 @@ public class MainActivity extends AppCompatActivity implements GLSurfaceView.Ren
         // Enable Javascript
         WebSettings webSettings = mWebView.getSettings();
         webSettings.setJavaScriptEnabled(true);
+
+        if (0 != (getApplicationInfo().flags & ApplicationInfo.FLAG_DEBUGGABLE)) {
+            WebView.setWebContentsDebuggingEnabled(true);
+        }
 
         webSettings.setLoadsImagesAutomatically(true);
         webSettings.setAllowUniversalAccessFromFileURLs(true);
@@ -216,13 +221,11 @@ public class MainActivity extends AppCompatActivity implements GLSurfaceView.Ren
             this.runOnUiThread(new Runnable(){
                 @Override
                 public void run(){
-                mWebView.evaluateJavascript("javascript:window.WebARonARCoreSetData("
-                    + data + ")", new ValueCallback<String>() {
-                    @Override
-                    public void onReceiveValue(String s) {
-                        //Log.d(TAG, s);
-                    }
-                });
+                mWebView.evaluateJavascript(
+                    // Only set data if getVRDisplays has been called.
+                    "javascript:if(window.getVRDisplaysPromise)window.WebARonARCoreSetData("
+                        + data + ")",
+                    null);
                 }
             });
         } catch (Throwable t) {
@@ -289,12 +292,12 @@ public class MainActivity extends AppCompatActivity implements GLSurfaceView.Ren
                     // don't forget to use decodeURIComponent after base64 decoding
                     "script.innerHTML = decodeURIComponent(escape(window.atob('" + encoded + "')));" +
                     "parent.appendChild(script)" +
-                    "})()", new ValueCallback<String>() {
+                    "})()", null /* new ValueCallback<String>() {
                 @Override
                 public void onReceiveValue(String s) {
                     //Log.d(TAG, s);
                 }
-            });
+            } */ );
         } catch (Exception e) {
             e.printStackTrace();
         }
@@ -311,9 +314,23 @@ public class MainActivity extends AppCompatActivity implements GLSurfaceView.Ren
         }
 
         @JavascriptInterface
-        public void postMessage(String toast) {
-            // TODO: handle e.g. setDepthNear: , setDepthFar, ...
-            Toast.makeText(mContext, toast, Toast.LENGTH_SHORT).show();
+        public void postMessage(String msg) {
+            // TODO: handle these properly
+            if (msg.startsWith("showCameraFeed:")) {
+                Log.d(TAG, msg);
+            } else
+            if (msg.startsWith("hideCameraFeed:")) {
+                Log.d(TAG, msg);
+            } else
+            if (msg.startsWith("setDepthNear:")) {
+                Log.d(TAG, msg);
+            } else
+            if (msg.startsWith("setDepthFar:")) {
+                Log.d(TAG, msg);
+            } else
+            if (msg.startsWith("log:")) {
+                Log.d(TAG, msg);
+            }
         }
     }
 }
