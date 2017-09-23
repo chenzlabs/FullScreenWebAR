@@ -97,7 +97,7 @@
      * The name of this display.
      * @type {string}
      */
-    this.displayName = "ARCore VR Device";
+    this.displayName = "ARKit-like ARCore VR Device";
 
     // Hacky code to handle camera feed show/hide
     // TODO: Improve it somehow.

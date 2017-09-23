@@ -1,6 +1,7 @@
 package com.machenmusik.fullscreenwebar;
 
 import android.content.Context;
+import android.graphics.Bitmap;
 import android.support.v7.app.AppCompatActivity;
 import android.os.Bundle;
 import android.util.Base64;
@@ -16,8 +17,11 @@ import android.webkit.WebView;
 import android.webkit.WebViewClient;
 import android.widget.Toast;
 
+import com.google.ar.core.Anchor;
 import com.google.ar.core.Config;
 import com.google.ar.core.Frame;
+import com.google.ar.core.Plane;
+import com.google.ar.core.Pose;
 import com.google.ar.core.Session;
 import com.machenmusik.fullscreenwebar.rendering.BackgroundRenderer;
 
@@ -26,6 +30,7 @@ import android.opengl.GLSurfaceView;
 
 import java.io.InputStream;
 import java.net.URLEncoder;
+import java.util.Collection;
 
 import javax.microedition.khronos.egl.EGLConfig;
 import javax.microedition.khronos.opengles.GL10;
@@ -41,6 +46,9 @@ public class MainActivity extends AppCompatActivity implements GLSurfaceView.Ren
     private BackgroundRenderer mBackgroundRenderer = new BackgroundRenderer();
 
     private WebView mWebView;
+    
+    private float mNear;
+    private float mFar;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -56,6 +64,9 @@ public class MainActivity extends AppCompatActivity implements GLSurfaceView.Ren
         mSurfaceView = (GLSurfaceView) findViewById(R.id.surfaceview);
 
         mSession = new Session(/*context=*/this);
+        
+        mNear = 0.1f;
+        mFar = 10000f;
 
         // Create default config, check is supported, create session from that config.
         mDefaultConfig = Config.createDefaultConfig();
@@ -77,18 +88,18 @@ public class MainActivity extends AppCompatActivity implements GLSurfaceView.Ren
         mWebView.setBackgroundColor(0x00000000);
         mWebView.setLayerType(WebView.LAYER_TYPE_HARDWARE, null);
 
+        mWebView.addJavascriptInterface(new WebARonARCoreInterface(this), "WebARonARCore");
+
         // Force links and redirects to open in the WebView instead of in a browser
         mWebView.setWebViewClient(new WebViewClient(){
             @Override
             public void onPageFinished(WebView view, String url) {
-                injectJS();
+                injectJS(); // FIXME: the injection may not finish before scene is loaded!
                 super.onPageFinished(view, url);
             }
         });
         mWebView.setWebChromeClient(new WebChromeClient(){
         });
-
-        mWebView.addJavascriptInterface(new WebARonARCoreInterface(this), "WebARonARCore");
 
         // Enable Javascript
         WebSettings webSettings = mWebView.getSettings();
@@ -106,7 +117,6 @@ public class MainActivity extends AppCompatActivity implements GLSurfaceView.Ren
         webSettings.setGeolocationEnabled(true);
         webSettings.setMediaPlaybackRequiresUserGesture(false);
         mWebView.loadUrl("https://clara.glitch.me/");
-        mWebView.setBackgroundColor(0x00000000);
     }
 
     @Override
@@ -200,22 +210,68 @@ public class MainActivity extends AppCompatActivity implements GLSurfaceView.Ren
             // Draw background.
             mBackgroundRenderer.draw(frame);
 
+            final String data = jsonDataFromARCoreSessionFrame(mSession, frame, mNear, mFar);
+
             // Set the data.
             this.runOnUiThread(new Runnable(){
                 @Override
                 public void run(){
-                    mWebView.evaluateJavascript("javascript:if(window.WebARonARCoreSetData)window.WebARonARCoreSetData(JSON.parse(window.WebARonARCore.getDataJSON()))", new ValueCallback<String>() {
-                        @Override
-                        public void onReceiveValue(String s) {
-                            // Do what you want with the return value
-                        }
-                    });
+                mWebView.evaluateJavascript("javascript:window.WebARonARCoreSetData("
+                    + data + ")", new ValueCallback<String>() {
+                    @Override
+                    public void onReceiveValue(String s) {
+                        //Log.d(TAG, s);
+                    }
+                });
                 }
             });
         } catch (Throwable t) {
             // Avoid crashing the application due to unhandled exceptions.
             Log.e(TAG, "Exception on the OpenGL thread", t);
         }
+    }
+
+    private String jsonDataFromARCoreSessionFrame(Session session, Frame frame, float fNear, float fFar) {
+        String anchorsString = "";
+        float[] m = {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0};
+        for (Plane plane : session.getAllPlanes()) {
+            Pose pose = plane.getCenterPose();
+            pose.toMatrix(m, 0);
+            anchorsString += String.format(
+                    "%s{\"modelMatrix\":[%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f]" +
+                            ",\"identifier\":%d" +
+                            ",\"alignment\":%d" +
+                            //",\"timestamp\":%d" +
+                            ",\"extent\":[%f,%f]}",
+                    anchorsString.length() > 0 ? "," : "",
+                    m[0], m[1], m[2], m[3], m[4], m[5], m[6], m[7],
+                    m[8], m[9], m[10], m[11], m[12], m[13], m[14], m[15],
+                    plane.hashCode(),
+                    plane.getType() == Plane.Type.HORIZONTAL_UPWARD_FACING ? 0 : -1,
+                    // TODO: timestamp
+                    plane.getExtentX(),
+                    plane.getExtentZ());
+        }
+
+        Pose pose = frame.getPose();
+        float[] viewM = {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0};
+        float[] projM = {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0};
+        frame.getViewMatrix(viewM, 0);
+        session.getProjectionMatrix(projM, 0, fNear, fFar);
+        String rtn = String.format(
+            "{\"position\":[%f,%f,%f]" +
+            ",\"orientation\":[%f,%f,%f,%f]" +
+            ",\"viewMatrix\":[%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f]" +
+            ",\"projectionMatrix\":[%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f]" +
+            ",\"anchors\":[%s]}",
+                pose.tx(), pose.ty(), pose.tz(),
+                pose.qx(), pose.qy(), pose.qz(), pose.qw(),
+                viewM[0], viewM[1], viewM[2], viewM[3], viewM[4], viewM[5], viewM[6], viewM[7],
+                viewM[8], viewM[9], viewM[10], viewM[11], viewM[12], viewM[13], viewM[14], viewM[15],
+                projM[0], projM[1], projM[2], projM[3], projM[4], projM[5], projM[6], projM[7],
+                projM[8], projM[9], projM[10], projM[11], projM[12], projM[13], projM[14], projM[15],
+                anchorsString);
+        return rtn;
     }
 
     private void injectJS() {
@@ -225,18 +281,20 @@ public class MainActivity extends AppCompatActivity implements GLSurfaceView.Ren
             inputStream.read(buffer);
             inputStream.close();
 
-            // preserve non-english letters
-            String uriEncoded = URLEncoder.encode(new String(buffer, "UTF-8"), "UTF-8").replace("+", "%20");
-
-            String encoded = Base64.encodeToString(uriEncoded.getBytes(), Base64.NO_WRAP);
-            mWebView.loadUrl("javascript:(function() {" +
+            String encoded = Base64.encodeToString(buffer, Base64.NO_WRAP);
+            mWebView.evaluateJavascript("javascript:(function() {" +
                     "var parent = document.getElementsByTagName('head').item(0);" +
                     "var script = document.createElement('script');" +
                     "script.type = 'text/javascript';" +
                     // don't forget to use decodeURIComponent after base64 decoding
-                    "script.innerHTML = decodeURIComponent(window.atob('" + encoded + "'));" +
+                    "script.innerHTML = decodeURIComponent(escape(window.atob('" + encoded + "')));" +
                     "parent.appendChild(script)" +
-                    "})()");
+                    "})()", new ValueCallback<String>() {
+                @Override
+                public void onReceiveValue(String s) {
+                    //Log.d(TAG, s);
+                }
+            });
         } catch (Exception e) {
             e.printStackTrace();
         }
@@ -254,16 +312,8 @@ public class MainActivity extends AppCompatActivity implements GLSurfaceView.Ren
 
         @JavascriptInterface
         public void postMessage(String toast) {
+            // TODO: handle e.g. setDepthNear: , setDepthFar, ...
             Toast.makeText(mContext, toast, Toast.LENGTH_SHORT).show();
-        }
-
-        @JavascriptInterface
-        public String getDataJSON() {
-            return "{\"position\":[0.0,1.0,2.0]"
-                    + ",\"orientation\":[0.0,0.0,0.0,1.0]"
-                    + ",\"viewMatrix\":[1.0,0.0,0.0,0.0,0.0,1.0,0.0,0.0,0.0,0.0,1.0,0.0,0.0,0.0,0.0,1.0]"
-                    + ",\"projectionMatrix\":[1.0,0.0,0.0,0.0,0.0,1.0,0.0,0.0,0.0,0.0,1.0,0.0,0.0,0.0,0.0,1.0]"
-                    + ",\"anchors\":[]}";
         }
     }
 }
