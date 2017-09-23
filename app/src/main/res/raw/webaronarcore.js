@@ -929,4 +929,7 @@
 
   // TODO: Implement cancelAnimationFrame. raf needs to return a unique
   // identifier and use it to cancel the call (remove it from the array).
+
+  // Since we're doing AR display polyfill, fire vrdisplayconnect to say it's there
+  window.dispatchEvent(new Event('ardisplayconnect'));
 })();
