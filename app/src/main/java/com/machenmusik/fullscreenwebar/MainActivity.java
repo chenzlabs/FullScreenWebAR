@@ -36,6 +36,9 @@ import java.util.Collection;
 import javax.microedition.khronos.egl.EGLConfig;
 import javax.microedition.khronos.opengles.GL10;
 
+import java.util.HashMap;
+import java.util.Map;
+
 public class MainActivity extends AppCompatActivity implements GLSurfaceView.Renderer {
     private static final String TAG = MainActivity.class.getSimpleName();
 
@@ -47,9 +50,12 @@ public class MainActivity extends AppCompatActivity implements GLSurfaceView.Ren
     private BackgroundRenderer mBackgroundRenderer = new BackgroundRenderer();
 
     private WebView mWebView;
+    private WebARonARCoreInterface mInterface;
     
     private float mNear;
     private float mFar;
+
+    private Map<Integer, Long> planeTimestamps;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -68,6 +74,8 @@ public class MainActivity extends AppCompatActivity implements GLSurfaceView.Ren
         
         mNear = 0.1f;
         mFar = 10000f;
+
+        planeTimestamps = null;
 
         // Create default config, check is supported, create session from that config.
         mDefaultConfig = Config.createDefaultConfig();
@@ -89,7 +97,8 @@ public class MainActivity extends AppCompatActivity implements GLSurfaceView.Ren
         mWebView.setBackgroundColor(0x00000000);
         mWebView.setLayerType(WebView.LAYER_TYPE_HARDWARE, null);
 
-        mWebView.addJavascriptInterface(new WebARonARCoreInterface(this), "WebARonARCore");
+        mInterface = new WebARonARCoreInterface(this);
+        mWebView.addJavascriptInterface(mInterface, "WebARonARCore");
 
         // Force links and redirects to open in the WebView instead of in a browser
         mWebView.setWebViewClient(new WebViewClient(){
@@ -215,7 +224,8 @@ public class MainActivity extends AppCompatActivity implements GLSurfaceView.Ren
             // Draw background.
             mBackgroundRenderer.draw(frame);
 
-            final String data = jsonDataFromARCoreSessionFrame(mSession, frame, mNear, mFar);
+            updatePlaneTimestampsForARCoreSessionFrame(mSession, frame);
+            mInterface.jsonData = jsonDataFromARCoreSessionFrame(mSession, frame, mNear, mFar);
 
             // Set the data.
             this.runOnUiThread(new Runnable(){
@@ -223,8 +233,10 @@ public class MainActivity extends AppCompatActivity implements GLSurfaceView.Ren
                 public void run(){
                 mWebView.evaluateJavascript(
                     // Only set data if getVRDisplays has been called.
-                    "javascript:if(window.getVRDisplaysPromise)window.WebARonARCoreSetData("
-                        + data + ")",
+                    "javascript:"
+                    + "if(window.getVRDisplaysPromise){"
+                      + "window.WebARonARCoreSetData(JSON.parse(window.WebARonARCore.getData()))"
+                    + "}",
                     null);
                 }
             });
@@ -234,24 +246,42 @@ public class MainActivity extends AppCompatActivity implements GLSurfaceView.Ren
         }
     }
 
+    private void updatePlaneTimestampsForARCoreSessionFrame(Session session, Frame frame) {
+        long frameTimestamp = frame.getTimestampNs();
+
+        if (planeTimestamps == null) {
+            planeTimestamps = new HashMap<Integer, Long>();
+            for (Plane plane : session.getAllPlanes()) {
+                planeTimestamps.put(plane.hashCode(), frameTimestamp);
+            }
+        } else {
+            for (Plane plane : frame.getUpdatedPlanes()) {
+                planeTimestamps.put(plane.hashCode(), frameTimestamp);
+            }
+        }
+    }
+
     private String jsonDataFromARCoreSessionFrame(Session session, Frame frame, float fNear, float fFar) {
         String anchorsString = "";
         float[] m = {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0};
         for (Plane plane : session.getAllPlanes()) {
+            int id = plane.hashCode();
             Pose pose = plane.getCenterPose();
             pose.toMatrix(m, 0);
             anchorsString += String.format(
                     "%s{\"modelMatrix\":[%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f]" +
                             ",\"identifier\":%d" +
                             ",\"alignment\":%d" +
-                            //",\"timestamp\":%d" +
+                            ",\"timestamp\":%d" +
+                            // TODO: vertices
                             ",\"extent\":[%f,%f]}",
                     anchorsString.length() > 0 ? "," : "",
                     m[0], m[1], m[2], m[3], m[4], m[5], m[6], m[7],
                     m[8], m[9], m[10], m[11], m[12], m[13], m[14], m[15],
-                    plane.hashCode(),
+                    id,
                     plane.getType() == Plane.Type.HORIZONTAL_UPWARD_FACING ? 0 : -1,
-                    // TODO: timestamp
+                    planeTimestamps.get(id),
+                    // TODO: vertices
                     plane.getExtentX(),
                     plane.getExtentZ());
         }
@@ -308,9 +338,15 @@ public class MainActivity extends AppCompatActivity implements GLSurfaceView.Ren
     */
     public class WebARonARCoreInterface {
         Context mContext;
+        public String jsonData;
 
         WebARonARCoreInterface(Context c) {
             mContext = c;
+        }
+
+        @JavascriptInterface
+        public String getData() {
+            return jsonData;
         }
 
         @JavascriptInterface
