@@ -31,6 +31,7 @@ import android.opengl.GLSurfaceView;
 
 import java.io.InputStream;
 import java.net.URLEncoder;
+import java.nio.FloatBuffer;
 import java.util.Collection;
 
 import javax.microedition.khronos.egl.EGLConfig;
@@ -268,12 +269,24 @@ public class MainActivity extends AppCompatActivity implements GLSurfaceView.Ren
             int id = plane.hashCode();
             Pose pose = plane.getCenterPose();
             pose.toMatrix(m, 0);
+            StringBuffer verticesJSON = null;
+            float[] vertices = plane.getPlanePolygon().array();
+            for (int i=0; i<vertices.length; i+=2) {
+                float x = vertices[i];
+                float y = 0;
+                float z = vertices[i+1];
+                if (verticesJSON == null) {
+                    verticesJSON = new StringBuffer(String.format("%f,%f,%f", x, y, z));
+                } else {
+                    verticesJSON.append(String.format(",%f,%f,%f", x, y, z));
+                }
+            }
             anchorsString += String.format(
                     "%s{\"modelMatrix\":[%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f]" +
                             ",\"identifier\":%d" +
                             ",\"alignment\":%d" +
                             ",\"timestamp\":%d" +
-                            // TODO: vertices
+                            ",\"vertices\":[%s]" +
                             ",\"extent\":[%f,%f]}",
                     anchorsString.length() > 0 ? "," : "",
                     m[0], m[1], m[2], m[3], m[4], m[5], m[6], m[7],
@@ -281,7 +294,7 @@ public class MainActivity extends AppCompatActivity implements GLSurfaceView.Ren
                     id,
                     plane.getType() == Plane.Type.HORIZONTAL_UPWARD_FACING ? 0 : -1,
                     planeTimestamps.get(id),
-                    // TODO: vertices
+                    verticesJSON,
                     plane.getExtentX(),
                     plane.getExtentZ());
         }

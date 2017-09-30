@@ -801,22 +801,24 @@
     // ARKit doesn't come with vertices, so generate them for parity with ARKit.
     for (var i = 0; i < WebARonARCoreVRDisplay.anchors_.length; i++) {
       var anchor = WebARonARCoreVRDisplay.anchors_[i];
-      anchor.vertices = [];
-      anchor.vertices.push(anchor.extent[0] / 2);
-      anchor.vertices.push(0);
-      anchor.vertices.push(anchor.extent[1] / 2);
+      if (!anchor.vertices) {
+          anchor.vertices = [];
+          anchor.vertices.push(anchor.extent[0] / 2);
+          anchor.vertices.push(0);
+          anchor.vertices.push(anchor.extent[1] / 2);
 
-      anchor.vertices.push(-anchor.extent[0] / 2);
-      anchor.vertices.push(0);
-      anchor.vertices.push(anchor.extent[1] / 2);
+          anchor.vertices.push(-anchor.extent[0] / 2);
+          anchor.vertices.push(0);
+          anchor.vertices.push(anchor.extent[1] / 2);
 
-      anchor.vertices.push(-anchor.extent[0] / 2);
-      anchor.vertices.push(0);
-      anchor.vertices.push(-anchor.extent[1] / 2);
+          anchor.vertices.push(-anchor.extent[0] / 2);
+          anchor.vertices.push(0);
+          anchor.vertices.push(-anchor.extent[1] / 2);
 
-      anchor.vertices.push(anchor.extent[0] / 2);
-      anchor.vertices.push(0);
-      anchor.vertices.push(-anchor.extent[1] / 2);
+          anchor.vertices.push(anchor.extent[0] / 2);
+          anchor.vertices.push(0);
+          anchor.vertices.push(-anchor.extent[1] / 2);
+      }
     }
 
     callRafCallbacks();
