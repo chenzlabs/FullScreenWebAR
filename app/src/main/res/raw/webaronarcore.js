@@ -550,6 +550,14 @@
       return this.anchors_;
     };
 
+    this.getPointCloud = function() {
+      return JSON.parse(window.WebARonARCore.getPointCloudData());
+    };
+
+    this.getAmbientLightEstimate = function() {
+      return this.ambientLightEstimate__;
+    };
+
     return this;
   };
 
@@ -820,6 +828,8 @@
           anchor.vertices.push(-anchor.extent[1] / 2);
       }
     }
+
+    WebARonARCoreVRDisplay.ambientLightEstimate_ = data.ambientLightEstimate;
 
     callRafCallbacks();
   };

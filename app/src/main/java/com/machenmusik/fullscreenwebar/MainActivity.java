@@ -22,6 +22,7 @@ import com.google.ar.core.Anchor;
 import com.google.ar.core.Config;
 import com.google.ar.core.Frame;
 import com.google.ar.core.Plane;
+import com.google.ar.core.PointCloud;
 import com.google.ar.core.Pose;
 import com.google.ar.core.Session;
 import com.machenmusik.fullscreenwebar.rendering.BackgroundRenderer;
@@ -80,6 +81,8 @@ public class MainActivity extends AppCompatActivity implements GLSurfaceView.Ren
 
         // Create default config, check is supported, create session from that config.
         mDefaultConfig = Config.createDefaultConfig();
+        mDefaultConfig.setLightingMode(Config.LightingMode.AMBIENT_INTENSITY);
+        mDefaultConfig.setPlaneFindingMode(Config.PlaneFindingMode.HORIZONTAL);
         if (!mSession.isSupported(mDefaultConfig)) {
             Toast.makeText(this, "This device does not support AR", Toast.LENGTH_LONG).show();
             finish();
@@ -227,6 +230,7 @@ public class MainActivity extends AppCompatActivity implements GLSurfaceView.Ren
 
             updatePlaneTimestampsForARCoreSessionFrame(mSession, frame);
             mInterface.jsonData = jsonDataFromARCoreSessionFrame(mSession, frame, mNear, mFar);
+            mInterface.pointcloudData = pointCloudDataFromARCoreSessionFrame(mSession, frame);
 
             // Set the data.
             this.runOnUiThread(new Runnable(){
@@ -262,6 +266,41 @@ public class MainActivity extends AppCompatActivity implements GLSurfaceView.Ren
         }
     }
 
+    private String pointCloudDataFromARCoreSessionFrame(Session session, Frame frame) {
+        StringBuffer pcjs = new StringBuffer();
+        PointCloud pointcloud = frame.getPointCloud();
+        if (pointcloud != null) {
+            FloatBuffer points = pointcloud.getPoints();
+            if (points != null) {
+                for (int i = 0; i < points.remaining(); i += 4) {
+                    float x = points.get(i);
+                    float y = points.get(i + 1);
+                    float z = points.get(i + 2);
+                    //float p = vertices[i+3];
+                    if (pcjs.length() == 0) {
+                        pcjs.append(String.format("%f,%f,%f", x, y, z));
+                    } else {
+                        pcjs.append(String.format(",%f,%f,%f", x, y, z));
+                    }
+                }
+            }
+        }
+        Pose pose = frame.getPointCloudPose();
+        String rtn = "";
+        if (pose != null) {
+            rtn =  String.format(
+                "{\"position\":[%f,%f,%f]" +
+                ",\"orientation\":[%f,%f,%f,%f]" +
+                ",\"timestamp\":%d" +
+                ",\"points\":[%s]}",
+                pose.tx(), pose.ty(), pose.tz(),
+                pose.qx(), pose.qy(), pose.qz(), pose.qw(),
+                pointcloud.getTimestampNs(),
+                pcjs);
+        }
+        return rtn;
+    }
+
     private String jsonDataFromARCoreSessionFrame(Session session, Frame frame, float fNear, float fFar) {
         String anchorsString = "";
         float[] m = {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0};
@@ -269,14 +308,14 @@ public class MainActivity extends AppCompatActivity implements GLSurfaceView.Ren
             int id = plane.hashCode();
             Pose pose = plane.getCenterPose();
             pose.toMatrix(m, 0);
-            StringBuffer verticesJSON = null;
+            StringBuffer verticesJSON = new StringBuffer();
             float[] vertices = plane.getPlanePolygon().array();
             for (int i=0; i<vertices.length; i+=2) {
                 float x = vertices[i];
                 float y = 0;
                 float z = vertices[i+1];
-                if (verticesJSON == null) {
-                    verticesJSON = new StringBuffer(String.format("%f,%f,%f", x, y, z));
+                if (verticesJSON.length() == 0) {
+                    verticesJSON.append(String.format("%f,%f,%f", x, y, z));
                 } else {
                     verticesJSON.append(String.format(",%f,%f,%f", x, y, z));
                 }
@@ -309,6 +348,7 @@ public class MainActivity extends AppCompatActivity implements GLSurfaceView.Ren
             ",\"orientation\":[%f,%f,%f,%f]" +
             ",\"viewMatrix\":[%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f]" +
             ",\"projectionMatrix\":[%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f]" +
+            ",\"ambientLightEstimate\":%f" +
             ",\"anchors\":[%s]}",
                 pose.tx(), pose.ty(), pose.tz(),
                 pose.qx(), pose.qy(), pose.qz(), pose.qw(),
@@ -316,6 +356,7 @@ public class MainActivity extends AppCompatActivity implements GLSurfaceView.Ren
                 viewM[8], viewM[9], viewM[10], viewM[11], viewM[12], viewM[13], viewM[14], viewM[15],
                 projM[0], projM[1], projM[2], projM[3], projM[4], projM[5], projM[6], projM[7],
                 projM[8], projM[9], projM[10], projM[11], projM[12], projM[13], projM[14], projM[15],
+                frame.getLightEstimate().getPixelIntensity(),
                 anchorsString);
         return rtn;
     }
@@ -352,6 +393,7 @@ public class MainActivity extends AppCompatActivity implements GLSurfaceView.Ren
     public class WebARonARCoreInterface {
         Context mContext;
         public String jsonData;
+        public String pointcloudData;
 
         WebARonARCoreInterface(Context c) {
             mContext = c;
@@ -360,6 +402,11 @@ public class MainActivity extends AppCompatActivity implements GLSurfaceView.Ren
         @JavascriptInterface
         public String getData() {
             return jsonData;
+        }
+
+        @JavascriptInterface
+        public String getPointCloudData() {
+            return pointcloudData;
         }
 
         @JavascriptInterface
