@@ -2,7 +2,7 @@
 
 # getPointCloud()
 
-Returns a JavaScript Object with , position, orientation, and points.
+Returns a JavaScript Object with timestamp, position, orientation, and points.
 - timestamp (for change detection)
 - position (array [x, y, z])
 - orientation (array [x, y, z, w])
