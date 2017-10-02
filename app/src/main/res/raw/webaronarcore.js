@@ -554,8 +554,8 @@
       return JSON.parse(window.WebARonARCore.getPointCloudData());
     };
 
-    this.getAmbientLightEstimate = function() {
-      return this.ambientLightEstimate__;
+    this.getAmbientLightIntensity = function() {
+      return this.lightEstimate_.ambientIntensity;
     };
 
     return this;
@@ -829,7 +829,7 @@
       }
     }
 
-    WebARonARCoreVRDisplay.ambientLightEstimate_ = data.ambientLightEstimate;
+    WebARonARCoreVRDisplay.lightEstimate_ = data.lightEstimate;
 
     callRafCallbacks();
   };
