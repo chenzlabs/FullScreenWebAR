@@ -8,6 +8,6 @@ Returns a JavaScript Object with timestamp, position, orientation, and points.
 - orientation (array [x, y, z, w])
 - points (array of numbers, which are the x, y, and z values for each point)
 
-# getAmbientLightEstimate()
+# getAmbientLightIntensity()
 
 Returns a number representing the ambient light intensity estimate. (from 0 to 1, I believe)
