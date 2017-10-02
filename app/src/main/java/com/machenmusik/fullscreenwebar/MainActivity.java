@@ -348,7 +348,7 @@ public class MainActivity extends AppCompatActivity implements GLSurfaceView.Ren
             ",\"orientation\":[%f,%f,%f,%f]" +
             ",\"viewMatrix\":[%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f]" +
             ",\"projectionMatrix\":[%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f]" +
-            ",\"ambientLightEstimate\":%f" +
+            ",\"lightEstimate\":{\"ambientIntensity\":%f}" +
             ",\"anchors\":[%s]}",
                 pose.tx(), pose.ty(), pose.tz(),
                 pose.qx(), pose.qy(), pose.qz(), pose.qw(),
