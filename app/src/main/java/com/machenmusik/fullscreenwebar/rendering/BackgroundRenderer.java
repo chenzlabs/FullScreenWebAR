@@ -13,9 +13,10 @@
  * limitations under the License.
  */
 package com.machenmusik.fullscreenwebar.rendering;
-
+/*
 import com.google.ar.core.Frame;
 import com.google.ar.core.Session;
+*/
 import com.machenmusik.fullscreenwebar.R;
 
 import android.content.Context;
@@ -125,6 +126,7 @@ public class BackgroundRenderer {
      *
      * @param frame The last {@code Frame} returned by {@link Session#update()}.
      */
+/*
     public void draw(Frame frame) {
         // If display rotation changed (also includes view size change), we need to re-query the uv
         // coordinates for the screen rect, as they may have changed as well.
@@ -165,7 +167,7 @@ public class BackgroundRenderer {
 
         ShaderUtil.checkGLError(TAG, "Draw");
     }
-
+*/
     public static final float[] QUAD_COORDS = new float[]{
             -1.0f, -1.0f, 0.0f,
             -1.0f, +1.0f, 0.0f,

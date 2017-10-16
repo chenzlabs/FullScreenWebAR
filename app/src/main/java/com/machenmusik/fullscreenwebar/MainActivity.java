@@ -17,7 +17,7 @@ import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
 import android.widget.Toast;
-
+/*
 import com.google.ar.core.Anchor;
 import com.google.ar.core.Config;
 import com.google.ar.core.Frame;
@@ -30,27 +30,27 @@ import com.machenmusik.fullscreenwebar.rendering.BackgroundRenderer;
 import android.opengl.GLES20;
 import android.opengl.GLSurfaceView;
 
+import javax.microedition.khronos.egl.EGLConfig;
+import javax.microedition.khronos.opengles.GL10;
+*/
 import java.io.InputStream;
 import java.net.URLEncoder;
 import java.nio.FloatBuffer;
 import java.util.Collection;
 
-import javax.microedition.khronos.egl.EGLConfig;
-import javax.microedition.khronos.opengles.GL10;
-
 import java.util.HashMap;
 import java.util.Map;
 
-public class MainActivity extends AppCompatActivity implements GLSurfaceView.Renderer {
+public class MainActivity extends AppCompatActivity /* implements GLSurfaceView.Renderer */ {
     private static final String TAG = MainActivity.class.getSimpleName();
-
+/*
     // Rendering. The Renderers are created here, and initialized when the GL surface is created.
     private GLSurfaceView mSurfaceView;
 
     private Config mDefaultConfig;
     private Session mSession;
     private BackgroundRenderer mBackgroundRenderer = new BackgroundRenderer();
-
+*/
     private WebView mWebView;
     private WebARonARCoreInterface mInterface;
     
@@ -69,10 +69,10 @@ public class MainActivity extends AppCompatActivity implements GLSurfaceView.Ren
                 WindowManager.LayoutParams.FLAG_FULLSCREEN);
 
         setContentView(R.layout.activity_main);
-
+/*
         mSurfaceView = (GLSurfaceView) findViewById(R.id.surfaceview);
 
-        mSession = new Session(/*context=*/this);
+        mSession = new Session(this);
         
         mNear = 0.1f;
         mFar = 10000f;
@@ -95,7 +95,7 @@ public class MainActivity extends AppCompatActivity implements GLSurfaceView.Ren
         mSurfaceView.setEGLConfigChooser(8, 8, 8, 8, 16, 0); // Alpha used for plane blending.
         mSurfaceView.setRenderer(this);
         mSurfaceView.setRenderMode(GLSurfaceView.RENDERMODE_CONTINUOUSLY);
-
+*/
         mWebView = (WebView) findViewById(R.id.activity_main_webview);
 
         mWebView.setBackgroundColor(0x00000000);
@@ -153,10 +153,12 @@ public class MainActivity extends AppCompatActivity implements GLSurfaceView.Ren
         // ARCore requires camera permissions to operate. If we did not yet obtain runtime
         // permission on Android M and above, now is a good time to ask the user for it.
         if (CameraPermissionHelper.hasCameraPermission(this)) {
+/*
             // showLoadingMessage();
             // Note that order matters - see the note in onPause(), the reverse applies here.
             mSession.resume(mDefaultConfig);
             mSurfaceView.onResume();
+*/
         } else {
             CameraPermissionHelper.requestCameraPermission(this);
         }
@@ -165,11 +167,13 @@ public class MainActivity extends AppCompatActivity implements GLSurfaceView.Ren
     @Override
     public void onPause() {
         super.onPause();
+/*
         // Note that the order matters - GLSurfaceView is paused first so that it does not try
         // to query the session. If Session is paused before GLSurfaceView, GLSurfaceView may
         // still call mSession.update() and get a SessionPausedException.
         mSurfaceView.onPause();
         mSession.pause();
+*/
     }
 
     @Override
@@ -196,19 +200,20 @@ public class MainActivity extends AppCompatActivity implements GLSurfaceView.Ren
             getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
         }
     }
-
+/*
     @Override
     public void onSurfaceCreated(GL10 gl, EGLConfig config) {
         GLES20.glClearColor(0.1f, 0.1f, 0.1f, 1.0f);
 
         // Create the texture and pass it to ARCore session to be filled during update().
-        mBackgroundRenderer.createOnGlThread(/*context=*/this);
+        mBackgroundRenderer.createOnGlThread(this);
         mSession.setCameraTextureName(mBackgroundRenderer.getTextureId());
     }
 
     @Override
     public void onSurfaceChanged(GL10 gl, int width, int height) {
         GLES20.glViewport(0, 0, width, height);
+
         // Notify ARCore session that the view size changed so that the perspective matrix and
         // the video background can be properly adjusted.
         mSession.setDisplayGeometry(width, height);
@@ -250,7 +255,8 @@ public class MainActivity extends AppCompatActivity implements GLSurfaceView.Ren
             Log.e(TAG, "Exception on the OpenGL thread", t);
         }
     }
-
+*/
+/*
     private void updatePlaneTimestampsForARCoreSessionFrame(Session session, Frame frame) {
         long frameTimestamp = frame.getTimestampNs();
 
@@ -360,7 +366,7 @@ public class MainActivity extends AppCompatActivity implements GLSurfaceView.Ren
                 anchorsString);
         return rtn;
     }
-
+*/
     private void injectJS() {
         try {
             InputStream inputStream = this.getApplicationContext().getResources().openRawResource(R.raw.webaronarcore); //getAssets().open("webaronarcore.jss");
