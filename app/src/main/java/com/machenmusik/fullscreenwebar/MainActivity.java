@@ -115,6 +115,8 @@ public class MainActivity extends AppCompatActivity implements GLSurfaceView.Ren
         mWebView.setWebChromeClient(new WebChromeClient(){
         });
 
+        WebView.setWebContentsDebuggingEnabled(true);
+
         // Enable Javascript
         WebSettings webSettings = mWebView.getSettings();
         webSettings.setJavaScriptEnabled(true);
