@@ -128,7 +128,7 @@ public class BackgroundRenderer {
     public void draw(Frame frame) {
         // If display rotation changed (also includes view size change), we need to re-query the uv
         // coordinates for the screen rect, as they may have changed as well.
-        if (frame.isDisplayRotationChanged()) {
+        if (frame.hasDisplayGeometryChanged()) { // name changed in 1.0... isDisplayRotationChanged()) {
             frame.transformDisplayUvCoords(mQuadTexCoord, mQuadTexCoordTransformed);
         }
 
