@@ -69,6 +69,15 @@ public class MainActivity extends AppCompatActivity implements GLSurfaceView.Ren
 
     private void ensureSession() {
 // in onResume:
+        // ARCore requires camera permissions to operate. If we did not yet obtain runtime
+        // permission on Android M and above, now is a good time to ask the user for it.
+        if (!CameraPermissionHelper.hasCameraPermission(this)) {
+            CameraPermissionHelper.requestCameraPermission(this);
+                // not sure if this blocks?
+                // apparently it does not
+        }
+        else
+
         try {
             if (mSession == null) {
                 switch (ArCoreApk.getInstance().requestInstall(this, mUserRequestedInstall)) {
@@ -107,6 +116,7 @@ public class MainActivity extends AppCompatActivity implements GLSurfaceView.Ren
 
         planeTimestamps = null;
 
+        // NO! We need camera permission first!
         ensureSession();
         if (mSession == null) {
             Toast.makeText(this, "ARCore 1.0 needed!", Toast.LENGTH_LONG).show();
@@ -118,6 +128,7 @@ public class MainActivity extends AppCompatActivity implements GLSurfaceView.Ren
         mDefaultConfig = new Config(mSession); // changed with 1.0... createDefaultConfig();
         mDefaultConfig.setLightEstimationMode(Config.LightEstimationMode.AMBIENT_INTENSITY); // changed with 1.0... setLightingMode(Config.LightingMode.AMBIENT_INTENSITY);
         mDefaultConfig.setPlaneFindingMode(Config.PlaneFindingMode.HORIZONTAL);
+        /* new */ mDefaultConfig.setUpdateMode(Config.UpdateMode.LATEST_CAMERA_IMAGE);
         if (!mSession.isSupported(mDefaultConfig)) {
             Toast.makeText(this, "This device does not support AR", Toast.LENGTH_LONG).show();
             finish();
@@ -192,10 +203,10 @@ public class MainActivity extends AppCompatActivity implements GLSurfaceView.Ren
 
         // ARCore requires camera permissions to operate. If we did not yet obtain runtime
         // permission on Android M and above, now is a good time to ask the user for it.
+        ensureSession();
         if (CameraPermissionHelper.hasCameraPermission(this)) {
             // showLoadingMessage();
             // Note that order matters - see the note in onPause(), the reverse applies here.
-            ensureSession();
             if (mSession == null) {
                 Toast.makeText(this, "ARCore 1.0 needed!", Toast.LENGTH_LONG).show();
                 finish();
@@ -203,9 +214,9 @@ public class MainActivity extends AppCompatActivity implements GLSurfaceView.Ren
             }
             mSession.resume(); // this changed with 1.0... mDefaultConfig);
             mSurfaceView.onResume();
-        } else {
+        } /* else {
             CameraPermissionHelper.requestCameraPermission(this);
-        }
+        } */
     }
 
     @Override
@@ -349,6 +360,7 @@ public class MainActivity extends AppCompatActivity implements GLSurfaceView.Ren
                 pointcloud.getTimestamp(), // changed in 1.0... getTimestampNs(),
                 pcjs);
 //        }
+        if (pointcloud != null) { pointcloud.release(); }
         return rtn;
     }
 
