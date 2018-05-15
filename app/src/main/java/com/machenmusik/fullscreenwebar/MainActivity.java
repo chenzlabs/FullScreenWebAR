@@ -1,5 +1,6 @@
 package com.machenmusik.fullscreenwebar;
 
+import android.app.Activity;
 import android.content.Context;
 import android.content.pm.ApplicationInfo;
 import android.graphics.Bitmap;
@@ -142,7 +143,7 @@ public class MainActivity extends AppCompatActivity implements GLSurfaceView.Ren
 
         setContentView(R.layout.activity_main);
 
-        mSurfaceView = (GLSurfaceView) findViewById(R.id.surfaceview);
+        mSurfaceView = (GLSurfaceView)findViewById(R.id.surfaceview);
 
         mNear = 0.1f;
         mFar = 10000f;
@@ -156,7 +157,7 @@ public class MainActivity extends AppCompatActivity implements GLSurfaceView.Ren
         mSurfaceView.setRenderer(this);
         mSurfaceView.setRenderMode(GLSurfaceView.RENDERMODE_CONTINUOUSLY);
 
-        mWebView = (WebView) findViewById(R.id.activity_main_webview);
+        mWebView = (WebView)findViewById(R.id.activity_main_webview);
 
         mWebView.setBackgroundColor(0x00000000);
         mWebView.setLayerType(WebView.LAYER_TYPE_HARDWARE, null);
