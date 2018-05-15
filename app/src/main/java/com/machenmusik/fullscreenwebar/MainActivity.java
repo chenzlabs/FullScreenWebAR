@@ -3,6 +3,7 @@ package com.machenmusik.fullscreenwebar;
 import android.content.Context;
 import android.content.pm.ApplicationInfo;
 import android.graphics.Bitmap;
+import android.support.annotation.NonNull;
 import android.support.v7.app.AppCompatActivity;
 import android.os.Bundle;
 import android.util.Base64;
@@ -29,6 +30,11 @@ import com.google.ar.core.PointCloud;
 import com.google.ar.core.Pose;
 import com.google.ar.core.Session;
 */
+import com.google.ar.core.exceptions.CameraNotAvailableException;
+import com.google.ar.core.exceptions.UnavailableApkTooOldException;
+import com.google.ar.core.exceptions.UnavailableArcoreNotInstalledException;
+import com.google.ar.core.exceptions.UnavailableDeviceNotCompatibleException;
+import com.google.ar.core.exceptions.UnavailableSdkTooOldException;
 import com.google.ar.core.exceptions.UnavailableUserDeclinedInstallationException;
 import com.machenmusik.fullscreenwebar.rendering.BackgroundRenderer;
 
@@ -77,7 +83,6 @@ public class MainActivity extends AppCompatActivity implements GLSurfaceView.Ren
                 // apparently it does not
         }
         else
-
         try {
             if (mSession == null) {
                 switch (ArCoreApk.getInstance().requestInstall(this, mUserRequestedInstall)) {
@@ -92,10 +97,40 @@ public class MainActivity extends AppCompatActivity implements GLSurfaceView.Ren
                         return;
                 }
             }
+        } catch (UnavailableDeviceNotCompatibleException e) {
+            // Display an appropriate message to the user and return gracefully.
+            Toast.makeText(this, "Device Not Compatible", Toast.LENGTH_LONG).show();
+            return;
+        } catch (UnavailableArcoreNotInstalledException e) {
+            // Display an appropriate message to the user and return gracefully.
+            Toast.makeText(this, "ARCore Not Installed", Toast.LENGTH_LONG).show();
+            return;
+        } catch (UnavailableApkTooOldException e) {
+            // Display an appropriate message to the user and return gracefully.
+            Toast.makeText(this, "APK Too Old", Toast.LENGTH_LONG).show();
+            return;
+        } catch (UnavailableSdkTooOldException e) {
+            // Display an appropriate message to the user and return gracefully.
+            Toast.makeText(this, "SDK Too Old", Toast.LENGTH_LONG).show();
+            return;
         } catch (UnavailableUserDeclinedInstallationException e) {
             // Display an appropriate message to the user and return gracefully.
             return;
         } //catch (...){  // current catch statements
+    }
+
+    @Override
+    public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions, @NonNull int[] results) {
+        if (!CameraPermissionHelper.hasCameraPermission(this)) {
+            Toast.makeText(this,
+                    "Camera permission is needed to run this application", Toast.LENGTH_LONG).show();
+            // this can happen during initial challenge... finish();
+        } else {
+            ensureSession();
+            if (mSession != null) {
+                onceWeHavePermission();
+            }
+        }
     }
 
     @Override
@@ -116,27 +151,15 @@ public class MainActivity extends AppCompatActivity implements GLSurfaceView.Ren
 
         planeTimestamps = null;
 
-        // NO! We need camera permission first!
-        ensureSession();
-        if (mSession == null) {
-            Toast.makeText(this, "ARCore 1.0 needed!", Toast.LENGTH_LONG).show();
-            finish();
-            return;
+        // ARCore requires camera permissions to operate. If we did not yet obtain runtime
+        // permission on Android M and above, now is a good time to ask the user for it.
+        if (!CameraPermissionHelper.hasCameraPermission(this)) {
+            CameraPermissionHelper.requestCameraPermission(this);
+            // not sure if this blocks?
+            // apparently it does not
+        } else {
+            ensureSession();
         }
-
-        // Create default config, check is supported, create session from that config.
-        mDefaultConfig = new Config(mSession); // changed with 1.0... createDefaultConfig();
-        mDefaultConfig.setLightEstimationMode(Config.LightEstimationMode.AMBIENT_INTENSITY); // changed with 1.0... setLightingMode(Config.LightingMode.AMBIENT_INTENSITY);
-        mDefaultConfig.setPlaneFindingMode(Config.PlaneFindingMode.HORIZONTAL);
-        /* new */ mDefaultConfig.setUpdateMode(Config.UpdateMode.LATEST_CAMERA_IMAGE);
-        if (!mSession.isSupported(mDefaultConfig)) {
-            Toast.makeText(this, "This device does not support AR", Toast.LENGTH_LONG).show();
-            finish();
-            return;
-        }
-
-        // (1.0) Use the config for this session.
-        mSession.configure(mDefaultConfig);
 
         // Set up renderer.
         mSurfaceView.setPreserveEGLContextOnPause(true);
@@ -185,6 +208,27 @@ public class MainActivity extends AppCompatActivity implements GLSurfaceView.Ren
         webSettings.setAllowFileAccess(true);
         webSettings.setGeolocationEnabled(true);
         webSettings.setMediaPlaybackRequiresUserGesture(false);
+
+        if (mSession != null) {
+            onceWeHavePermission();
+        }
+    }
+
+    protected void onceWeHavePermission() {
+        // Create default config, check is supported, create session from that config.
+        mDefaultConfig = new Config(mSession); // changed with 1.0... createDefaultConfig();
+        mDefaultConfig.setLightEstimationMode(Config.LightEstimationMode.AMBIENT_INTENSITY); // changed with 1.0... setLightingMode(Config.LightingMode.AMBIENT_INTENSITY);
+        mDefaultConfig.setPlaneFindingMode(Config.PlaneFindingMode.HORIZONTAL);
+        /* new */ mDefaultConfig.setUpdateMode(Config.UpdateMode.LATEST_CAMERA_IMAGE);
+        if (!mSession.isSupported(mDefaultConfig)) {
+            Toast.makeText(this, "This device does not support AR", Toast.LENGTH_LONG).show();
+            finish();
+            return;
+        }
+
+        // (1.0) Use the config for this session.
+        mSession.configure(mDefaultConfig);
+
         mWebView.loadUrl("https://clara.glitch.me/");
     }
 
@@ -201,22 +245,30 @@ public class MainActivity extends AppCompatActivity implements GLSurfaceView.Ren
     protected void onResume() {
         super.onResume();
 
-        // ARCore requires camera permissions to operate. If we did not yet obtain runtime
-        // permission on Android M and above, now is a good time to ask the user for it.
-        ensureSession();
-        if (CameraPermissionHelper.hasCameraPermission(this)) {
-            // showLoadingMessage();
-            // Note that order matters - see the note in onPause(), the reverse applies here.
-            if (mSession == null) {
-                Toast.makeText(this, "ARCore 1.0 needed!", Toast.LENGTH_LONG).show();
-                finish();
-                return;
+        try {
+            // ARCore requires camera permissions to operate. If we did not yet obtain runtime
+            // permission on Android M and above, now is a good time to ask the user for it.
+            if (!CameraPermissionHelper.hasCameraPermission(this)) {
+                CameraPermissionHelper.requestCameraPermission(this);
+                // not sure if this blocks?
+                // apparently it does not
+            } else {
+                ensureSession();
+                // showLoadingMessage();
+                // Note that order matters - see the note in onPause(), the reverse applies here.
+                if (mSession == null) {
+                    Toast.makeText(this, "ARCore 1.2 needed!", Toast.LENGTH_LONG).show();
+                    finish();
+                    return;
+                }
+                mSession.resume(); // this changed with 1.0... mDefaultConfig);
+                mSurfaceView.onResume();
             }
-            mSession.resume(); // this changed with 1.0... mDefaultConfig);
-            mSurfaceView.onResume();
-        } /* else {
-            CameraPermissionHelper.requestCameraPermission(this);
-        } */
+        } catch (CameraNotAvailableException e) {
+            // Display an appropriate message to the user and return gracefully.
+            Toast.makeText(this, "Camera Not Available", Toast.LENGTH_LONG).show();
+            return;
+        }
     }
 
     @Override
@@ -226,15 +278,8 @@ public class MainActivity extends AppCompatActivity implements GLSurfaceView.Ren
         // to query the session. If Session is paused before GLSurfaceView, GLSurfaceView may
         // still call mSession.update() and get a SessionPausedException.
         mSurfaceView.onPause();
-        mSession.pause();
-    }
-
-    @Override
-    public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] results) {
-        if (!CameraPermissionHelper.hasCameraPermission(this)) {
-            Toast.makeText(this,
-                    "Camera permission is needed to run this application", Toast.LENGTH_LONG).show();
-            finish();
+        if (mSession != null) {
+            mSession.pause();
         }
     }
 
