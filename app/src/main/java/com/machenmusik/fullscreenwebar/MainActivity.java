@@ -3,10 +3,12 @@ package com.machenmusik.fullscreenwebar;
 import android.content.Context;
 import android.content.pm.ApplicationInfo;
 import android.graphics.Bitmap;
+import android.support.annotation.NonNull;
 import android.support.v7.app.AppCompatActivity;
 import android.os.Bundle;
 import android.util.Base64;
 import android.util.Log;
+import android.view.Surface;
 import android.view.View;
 import android.view.Window;
 import android.view.WindowManager;
@@ -18,6 +20,8 @@ import android.webkit.WebView;
 import android.webkit.WebViewClient;
 import android.widget.Toast;
 
+import com.google.ar.core.*;
+/*
 import com.google.ar.core.Anchor;
 import com.google.ar.core.Config;
 import com.google.ar.core.Frame;
@@ -25,6 +29,13 @@ import com.google.ar.core.Plane;
 import com.google.ar.core.PointCloud;
 import com.google.ar.core.Pose;
 import com.google.ar.core.Session;
+*/
+import com.google.ar.core.exceptions.CameraNotAvailableException;
+import com.google.ar.core.exceptions.UnavailableApkTooOldException;
+import com.google.ar.core.exceptions.UnavailableArcoreNotInstalledException;
+import com.google.ar.core.exceptions.UnavailableDeviceNotCompatibleException;
+import com.google.ar.core.exceptions.UnavailableSdkTooOldException;
+import com.google.ar.core.exceptions.UnavailableUserDeclinedInstallationException;
 import com.machenmusik.fullscreenwebar.rendering.BackgroundRenderer;
 
 import android.opengl.GLES20;
@@ -59,6 +70,67 @@ public class MainActivity extends AppCompatActivity implements GLSurfaceView.Ren
 
     private Map<Integer, Long> planeTimestamps;
 
+    // Set to true ensures requestInstall() triggers installation if necessary.
+    private boolean mUserRequestedInstall = true;
+
+    private void ensureSession() {
+        // ARCore requires camera permissions to operate. If we did not yet obtain runtime
+        // permission on Android M and above, now is a good time to ask the user for it.
+        if (!CameraPermissionHelper.hasCameraPermission(this)) {
+            CameraPermissionHelper.requestCameraPermission(this);
+            // NOTE: This does not block!
+        }
+        else
+        try {
+            if (mSession == null) {
+                switch (ArCoreApk.getInstance().requestInstall(this, mUserRequestedInstall)) {
+                    case INSTALLED:
+                        mSession = new Session(this);
+                        // Success.
+                        break;
+                    case INSTALL_REQUESTED:
+                        // Ensures next invocation of requestInstall() will either return
+                        // INSTALLED or throw an exception.
+                        mUserRequestedInstall = false;
+                        return;
+                }
+            }
+        } catch (UnavailableDeviceNotCompatibleException e) {
+            // Display an appropriate message to the user and return gracefully.
+            Toast.makeText(this, "Device Not Compatible", Toast.LENGTH_LONG).show();
+            return;
+        } catch (UnavailableArcoreNotInstalledException e) {
+            // Display an appropriate message to the user and return gracefully.
+            Toast.makeText(this, "ARCore Not Installed", Toast.LENGTH_LONG).show();
+            return;
+        } catch (UnavailableApkTooOldException e) {
+            // Display an appropriate message to the user and return gracefully.
+            Toast.makeText(this, "APK Too Old", Toast.LENGTH_LONG).show();
+            return;
+        } catch (UnavailableSdkTooOldException e) {
+            // Display an appropriate message to the user and return gracefully.
+            Toast.makeText(this, "SDK Too Old", Toast.LENGTH_LONG).show();
+            return;
+        } catch (UnavailableUserDeclinedInstallationException e) {
+            // Display an appropriate message to the user and return gracefully.
+            return;
+        } //catch (...){  // current catch statements
+    }
+
+    @Override
+    public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions, @NonNull int[] results) {
+        if (!CameraPermissionHelper.hasCameraPermission(this)) {
+            Toast.makeText(this,
+                    "Camera permission is needed to run this application", Toast.LENGTH_LONG).show();
+            // this can happen during initial challenge... finish();
+        } else {
+            ensureSession();
+            if (mSession != null) {
+                onceWeHavePermission();
+            }
+        }
+    }
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         requestWindowFeature(Window.FEATURE_NO_TITLE);
@@ -72,22 +144,10 @@ public class MainActivity extends AppCompatActivity implements GLSurfaceView.Ren
 
         mSurfaceView = (GLSurfaceView) findViewById(R.id.surfaceview);
 
-        mSession = new Session(/*context=*/this);
-        
         mNear = 0.1f;
         mFar = 10000f;
 
         planeTimestamps = null;
-
-        // Create default config, check is supported, create session from that config.
-        mDefaultConfig = Config.createDefaultConfig();
-        mDefaultConfig.setLightingMode(Config.LightingMode.AMBIENT_INTENSITY);
-        mDefaultConfig.setPlaneFindingMode(Config.PlaneFindingMode.HORIZONTAL);
-        if (!mSession.isSupported(mDefaultConfig)) {
-            Toast.makeText(this, "This device does not support AR", Toast.LENGTH_LONG).show();
-            finish();
-            return;
-        }
 
         // Set up renderer.
         mSurfaceView.setPreserveEGLContextOnPause(true);
@@ -136,6 +196,29 @@ public class MainActivity extends AppCompatActivity implements GLSurfaceView.Ren
         webSettings.setAllowFileAccess(true);
         webSettings.setGeolocationEnabled(true);
         webSettings.setMediaPlaybackRequiresUserGesture(false);
+
+        // Try to ensure we have a session, which may trigger camera permission check.
+        ensureSession();
+        if (mSession != null) {
+            onceWeHavePermission();
+        }
+    }
+
+    protected void onceWeHavePermission() {
+        // Create default config, check is supported, create session from that config.
+        mDefaultConfig = new Config(mSession); // changed with 1.0... createDefaultConfig();
+        mDefaultConfig.setLightEstimationMode(Config.LightEstimationMode.AMBIENT_INTENSITY); // changed with 1.0... setLightingMode(Config.LightingMode.AMBIENT_INTENSITY);
+        mDefaultConfig.setPlaneFindingMode(Config.PlaneFindingMode.HORIZONTAL);
+        /* new */ mDefaultConfig.setUpdateMode(Config.UpdateMode.LATEST_CAMERA_IMAGE);
+        if (!mSession.isSupported(mDefaultConfig)) {
+            Toast.makeText(this, "This device does not support AR", Toast.LENGTH_LONG).show();
+            finish();
+            return;
+        }
+
+        // (1.0) Use the config for this session.
+        mSession.configure(mDefaultConfig);
+
         mWebView.loadUrl("https://clara.glitch.me/");
     }
 
@@ -152,15 +235,18 @@ public class MainActivity extends AppCompatActivity implements GLSurfaceView.Ren
     protected void onResume() {
         super.onResume();
 
-        // ARCore requires camera permissions to operate. If we did not yet obtain runtime
-        // permission on Android M and above, now is a good time to ask the user for it.
-        if (CameraPermissionHelper.hasCameraPermission(this)) {
-            // showLoadingMessage();
+        try {
+            // Try to ensure we have a session, which may trigger camera permission check.
+            ensureSession();
             // Note that order matters - see the note in onPause(), the reverse applies here.
-            mSession.resume(mDefaultConfig);
+            if (mSession != null) {
+                mSession.resume(); // this changed with 1.0... mDefaultConfig);
+            }
             mSurfaceView.onResume();
-        } else {
-            CameraPermissionHelper.requestCameraPermission(this);
+        } catch (CameraNotAvailableException e) {
+            // Display an appropriate message to the user and return gracefully.
+            Toast.makeText(this, "Camera Not Available", Toast.LENGTH_LONG).show();
+            return;
         }
     }
 
@@ -171,15 +257,8 @@ public class MainActivity extends AppCompatActivity implements GLSurfaceView.Ren
         // to query the session. If Session is paused before GLSurfaceView, GLSurfaceView may
         // still call mSession.update() and get a SessionPausedException.
         mSurfaceView.onPause();
-        mSession.pause();
-    }
-
-    @Override
-    public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] results) {
-        if (!CameraPermissionHelper.hasCameraPermission(this)) {
-            Toast.makeText(this,
-                    "Camera permission is needed to run this application", Toast.LENGTH_LONG).show();
-            finish();
+        if (mSession != null) {
+            mSession.pause();
         }
     }
 
@@ -213,7 +292,8 @@ public class MainActivity extends AppCompatActivity implements GLSurfaceView.Ren
         GLES20.glViewport(0, 0, width, height);
         // Notify ARCore session that the view size changed so that the perspective matrix and
         // the video background can be properly adjusted.
-        mSession.setDisplayGeometry(width, height);
+        int rotation = getWindowManager().getDefaultDisplay().getRotation();
+        mSession.setDisplayGeometry(rotation, width, height);
     }
 
     @Override
@@ -254,15 +334,15 @@ public class MainActivity extends AppCompatActivity implements GLSurfaceView.Ren
     }
 
     private void updatePlaneTimestampsForARCoreSessionFrame(Session session, Frame frame) {
-        long frameTimestamp = frame.getTimestampNs();
+        long frameTimestamp = frame.getTimestamp(); // name changed in 1.0... getTimestampNs();
 
         if (planeTimestamps == null) {
             planeTimestamps = new HashMap<Integer, Long>();
-            for (Plane plane : session.getAllPlanes()) {
+            for (Plane plane : session.getAllTrackables(Plane.class)) { // name changed in 1.0... getAllPlanes()) {
                 planeTimestamps.put(plane.hashCode(), frameTimestamp);
             }
         } else {
-            for (Plane plane : frame.getUpdatedPlanes()) {
+            for (Plane plane : frame.getUpdatedTrackables(Plane.class)) { // name changed in 1.0... getUpdatedPlanes()) {
                 planeTimestamps.put(plane.hashCode(), frameTimestamp);
             }
         }
@@ -270,7 +350,7 @@ public class MainActivity extends AppCompatActivity implements GLSurfaceView.Ren
 
     private String pointCloudDataFromARCoreSessionFrame(Session session, Frame frame) {
         StringBuffer pcjs = new StringBuffer();
-        PointCloud pointcloud = frame.getPointCloud();
+        PointCloud pointcloud = frame.acquirePointCloud(); // name changed in 1.0... getPointCloud();
         if (pointcloud != null) {
             FloatBuffer points = pointcloud.getPoints();
             if (points != null) {
@@ -287,31 +367,37 @@ public class MainActivity extends AppCompatActivity implements GLSurfaceView.Ren
                 }
             }
         }
-        Pose pose = frame.getPointCloudPose();
+// no longer in 1.0... Pose pose = frame.getPointCloudPose();
         String rtn = "";
-        if (pose != null) {
+//        if (pose != null) {
             rtn =  String.format(
+/* changed in 1.0
                 "{\"position\":[%f,%f,%f]" +
                 ",\"orientation\":[%f,%f,%f,%f]" +
                 ",\"timestamp\":%d" +
+*/
+                "{\"timestamp\":%d" +
                 ",\"points\":[%s]}",
+/* changed in 1.0
                 pose.tx(), pose.ty(), pose.tz(),
                 pose.qx(), pose.qy(), pose.qz(), pose.qw(),
-                pointcloud.getTimestampNs(),
+*/
+                pointcloud.getTimestamp(), // changed in 1.0... getTimestampNs(),
                 pcjs);
-        }
+//        }
+        if (pointcloud != null) { pointcloud.release(); }
         return rtn;
     }
 
     private String jsonDataFromARCoreSessionFrame(Session session, Frame frame, float fNear, float fFar) {
         String anchorsString = "";
         float[] m = {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0};
-        for (Plane plane : session.getAllPlanes()) {
+        for (Plane plane : session.getAllTrackables(Plane.class)) { // changed in 1.0... getAllPlanes()) {
             int id = plane.hashCode();
             Pose pose = plane.getCenterPose();
             pose.toMatrix(m, 0);
             StringBuffer verticesJSON = new StringBuffer();
-            float[] vertices = plane.getPlanePolygon().array();
+            float[] vertices = plane.getPolygon() /* changed in 1.0... getPlanePolygon() */.array();
             for (int i=0; i<vertices.length; i+=2) {
                 float x = vertices[i];
                 float y = 0;
@@ -340,11 +426,11 @@ public class MainActivity extends AppCompatActivity implements GLSurfaceView.Ren
                     plane.getExtentZ());
         }
 
-        Pose pose = frame.getPose();
+        Pose pose = frame.getCamera()./*getDisplayOrientedPose()*/getPose(); // for 1.0, this is from camera (?)
         float[] viewM = {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0};
         float[] projM = {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0};
-        frame.getViewMatrix(viewM, 0);
-        session.getProjectionMatrix(projM, 0, fNear, fFar);
+        frame.getCamera().getViewMatrix(viewM, 0); // for 1.0, this is from camera
+        frame.getCamera().getProjectionMatrix(projM, 0, fNear, fFar); // for 1.0, this is from camera, not session
         String rtn = String.format(
             "{\"position\":[%f,%f,%f]" +
             ",\"orientation\":[%f,%f,%f,%f]" +
