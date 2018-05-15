@@ -71,6 +71,8 @@ public class MainActivity extends AppCompatActivity implements GLSurfaceView.Ren
 
     private Map<Integer, Long> planeTimestamps;
 
+    private Runnable mRunnable;
+
     // Set to true ensures requestInstall() triggers installation if necessary.
     private boolean mUserRequestedInstall = true;
 
@@ -149,6 +151,19 @@ public class MainActivity extends AppCompatActivity implements GLSurfaceView.Ren
         mFar = 10000f;
 
         planeTimestamps = null;
+
+        mRunnable = new Runnable(){
+            @Override
+            public void run(){
+                mWebView.evaluateJavascript(
+                        // Only set data if getVRDisplays has been called.
+                        "javascript:"
+                                + "if(window.getVRDisplaysPromise){"
+                                + "window.WebARonARCoreSetData(JSON.parse(window.WebARonARCore.getData()))"
+                                + "}",
+                        null);
+            }
+        };
 
         // Set up renderer.
         mSurfaceView.setPreserveEGLContextOnPause(true);
@@ -306,28 +321,17 @@ public class MainActivity extends AppCompatActivity implements GLSurfaceView.Ren
             // Obtain the current frame from ARSession. When the configuration is set to
             // UpdateMode.BLOCKING (it is by default), this will throttle the rendering to the
             // camera framerate.
-            Frame frame = mSession.update();
-
-            // Draw background.
-            mBackgroundRenderer.draw(frame);
+            Frame frame = mSession.update(); // FIXME: we should only draw once AR data sent
 
             updatePlaneTimestampsForARCoreSessionFrame(mSession, frame);
             mInterface.jsonData = jsonDataFromARCoreSessionFrame(mSession, frame, mNear, mFar);
             mInterface.pointcloudData = pointCloudDataFromARCoreSessionFrame(mSession, frame);
 
             // Set the data.
-            this.runOnUiThread(new Runnable(){
-                @Override
-                public void run(){
-                mWebView.evaluateJavascript(
-                    // Only set data if getVRDisplays has been called.
-                    "javascript:"
-                    + "if(window.getVRDisplaysPromise){"
-                      + "window.WebARonARCoreSetData(JSON.parse(window.WebARonARCore.getData()))"
-                    + "}",
-                    null);
-                }
-            });
+            this.runOnUiThread(mRunnable);
+
+            // Draw background.
+            mBackgroundRenderer.draw(frame);
         } catch (Throwable t) {
             // Avoid crashing the application due to unhandled exceptions.
             Log.e(TAG, "Exception on the OpenGL thread", t);
