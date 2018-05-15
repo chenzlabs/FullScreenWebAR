@@ -74,13 +74,11 @@ public class MainActivity extends AppCompatActivity implements GLSurfaceView.Ren
     private boolean mUserRequestedInstall = true;
 
     private void ensureSession() {
-// in onResume:
         // ARCore requires camera permissions to operate. If we did not yet obtain runtime
         // permission on Android M and above, now is a good time to ask the user for it.
         if (!CameraPermissionHelper.hasCameraPermission(this)) {
             CameraPermissionHelper.requestCameraPermission(this);
-                // not sure if this blocks?
-                // apparently it does not
+            // NOTE: This does not block!
         }
         else
         try {
@@ -151,16 +149,6 @@ public class MainActivity extends AppCompatActivity implements GLSurfaceView.Ren
 
         planeTimestamps = null;
 
-        // ARCore requires camera permissions to operate. If we did not yet obtain runtime
-        // permission on Android M and above, now is a good time to ask the user for it.
-        if (!CameraPermissionHelper.hasCameraPermission(this)) {
-            CameraPermissionHelper.requestCameraPermission(this);
-            // not sure if this blocks?
-            // apparently it does not
-        } else {
-            ensureSession();
-        }
-
         // Set up renderer.
         mSurfaceView.setPreserveEGLContextOnPause(true);
         mSurfaceView.setEGLContextClientVersion(2);
@@ -209,6 +197,8 @@ public class MainActivity extends AppCompatActivity implements GLSurfaceView.Ren
         webSettings.setGeolocationEnabled(true);
         webSettings.setMediaPlaybackRequiresUserGesture(false);
 
+        // Try to ensure we have a session, which may trigger camera permission check.
+        ensureSession();
         if (mSession != null) {
             onceWeHavePermission();
         }
@@ -246,24 +236,13 @@ public class MainActivity extends AppCompatActivity implements GLSurfaceView.Ren
         super.onResume();
 
         try {
-            // ARCore requires camera permissions to operate. If we did not yet obtain runtime
-            // permission on Android M and above, now is a good time to ask the user for it.
-            if (!CameraPermissionHelper.hasCameraPermission(this)) {
-                CameraPermissionHelper.requestCameraPermission(this);
-                // not sure if this blocks?
-                // apparently it does not
-            } else {
-                ensureSession();
-                // showLoadingMessage();
-                // Note that order matters - see the note in onPause(), the reverse applies here.
-                if (mSession == null) {
-                    Toast.makeText(this, "ARCore 1.2 needed!", Toast.LENGTH_LONG).show();
-                    finish();
-                    return;
-                }
+            // Try to ensure we have a session, which may trigger camera permission check.
+            ensureSession();
+            // Note that order matters - see the note in onPause(), the reverse applies here.
+            if (mSession != null) {
                 mSession.resume(); // this changed with 1.0... mDefaultConfig);
-                mSurfaceView.onResume();
             }
+            mSurfaceView.onResume();
         } catch (CameraNotAvailableException e) {
             // Display an appropriate message to the user and return gracefully.
             Toast.makeText(this, "Camera Not Available", Toast.LENGTH_LONG).show();
@@ -313,7 +292,8 @@ public class MainActivity extends AppCompatActivity implements GLSurfaceView.Ren
         GLES20.glViewport(0, 0, width, height);
         // Notify ARCore session that the view size changed so that the perspective matrix and
         // the video background can be properly adjusted.
-        mSession.setDisplayGeometry(Surface.ROTATION_0 /* ??? */, width, height);
+        int rotation = getWindowManager().getDefaultDisplay().getRotation();
+        mSession.setDisplayGeometry(rotation, width, height);
     }
 
     @Override
