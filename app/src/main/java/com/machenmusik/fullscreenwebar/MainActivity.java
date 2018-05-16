@@ -76,6 +76,9 @@ public class MainActivity extends AppCompatActivity implements GLSurfaceView.Ren
     // Set to true ensures requestInstall() triggers installation if necessary.
     private boolean mUserRequestedInstall = true;
 
+    private boolean mARDataWasUsed = true;
+    private Frame mDrawThisFrame = null;
+
     private void ensureSession() {
         // ARCore requires camera permissions to operate. If we did not yet obtain runtime
         // permission on Android M and above, now is a good time to ask the user for it.
@@ -159,7 +162,8 @@ public class MainActivity extends AppCompatActivity implements GLSurfaceView.Ren
                         // Only set data if getVRDisplays has been called.
                         "javascript:"
                                 + "if(window.getVRDisplaysPromise){"
-                                + "window.WebARonARCoreSetData(JSON.parse(window.WebARonARCore.getData()))"
+                                + "window.WebARonARCoreSetData(JSON.parse(window.WebARonARCore.getData()));"
+                                + "window.WebARonARCore.postMessage('arDataWasUsed:');"
                                 + "}",
                         null);
             }
@@ -225,13 +229,14 @@ public class MainActivity extends AppCompatActivity implements GLSurfaceView.Ren
         mDefaultConfig = new Config(mSession); // changed with 1.0... createDefaultConfig();
         mDefaultConfig.setLightEstimationMode(Config.LightEstimationMode.AMBIENT_INTENSITY); // changed with 1.0... setLightingMode(Config.LightingMode.AMBIENT_INTENSITY);
         mDefaultConfig.setPlaneFindingMode(Config.PlaneFindingMode.HORIZONTAL);
-        /* new */ mDefaultConfig.setUpdateMode(Config.UpdateMode.LATEST_CAMERA_IMAGE);
+        mDefaultConfig.setUpdateMode(Config.UpdateMode.BLOCKING); //LATEST_CAMERA_IMAGE);
+/* isSupported now deprecated...
         if (!mSession.isSupported(mDefaultConfig)) {
             Toast.makeText(this, "This device does not support AR", Toast.LENGTH_LONG).show();
             finish();
             return;
         }
-
+*/
         // (1.0) Use the config for this session.
         mSession.configure(mDefaultConfig);
 
@@ -314,8 +319,17 @@ public class MainActivity extends AppCompatActivity implements GLSurfaceView.Ren
 
     @Override
     public void onDrawFrame(GL10 gl) {
-        // Clear screen to notify driver it should not load any pixels from previous frame.
-        GLES20.glClear(GLES20.GL_COLOR_BUFFER_BIT | GLES20.GL_DEPTH_BUFFER_BIT);
+        if (!mARDataWasUsed) { return; }
+
+        if (mDrawThisFrame != null) {
+            // Clear screen to notify driver it should not load any pixels from previous frame.
+            GLES20.glClear(GLES20.GL_COLOR_BUFFER_BIT | GLES20.GL_DEPTH_BUFFER_BIT);
+
+            // Draw background.
+            mBackgroundRenderer.draw(mDrawThisFrame);
+
+            mDrawThisFrame = null;
+        }
 
         try {
             // Obtain the current frame from ARSession. When the configuration is set to
@@ -329,9 +343,7 @@ public class MainActivity extends AppCompatActivity implements GLSurfaceView.Ren
 
             // Set the data.
             this.runOnUiThread(mRunnable);
-
-            // Draw background.
-            mBackgroundRenderer.draw(frame);
+            mDrawThisFrame = frame;
         } catch (Throwable t) {
             // Avoid crashing the application due to unhandled exceptions.
             Log.e(TAG, "Exception on the OpenGL thread", t);
@@ -519,6 +531,10 @@ public class MainActivity extends AppCompatActivity implements GLSurfaceView.Ren
             } else
             if (msg.startsWith("log:")) {
                 Log.d(TAG, msg);
+            } else
+            if (msg.startsWith("arDataWasUsed:")) {
+                //Log.d(TAG, msg);
+                mARDataWasUsed = true;
             }
         }
     }
