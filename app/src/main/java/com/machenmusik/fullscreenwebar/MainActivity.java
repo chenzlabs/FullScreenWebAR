@@ -4,6 +4,8 @@ import android.app.Activity;
 import android.content.Context;
 import android.content.pm.ApplicationInfo;
 import android.graphics.Bitmap;
+import android.os.Handler;
+import android.os.Looper;
 import android.support.annotation.NonNull;
 import android.support.v7.app.AppCompatActivity;
 import android.os.Bundle;
@@ -229,7 +231,7 @@ public class MainActivity extends AppCompatActivity implements GLSurfaceView.Ren
         mDefaultConfig = new Config(mSession); // changed with 1.0... createDefaultConfig();
         mDefaultConfig.setLightEstimationMode(Config.LightEstimationMode.AMBIENT_INTENSITY); // changed with 1.0... setLightingMode(Config.LightingMode.AMBIENT_INTENSITY);
         mDefaultConfig.setPlaneFindingMode(Config.PlaneFindingMode.HORIZONTAL);
-        mDefaultConfig.setUpdateMode(Config.UpdateMode.BLOCKING); //LATEST_CAMERA_IMAGE);
+        mDefaultConfig.setUpdateMode(Config.UpdateMode./*BLOCKING); */LATEST_CAMERA_IMAGE);
 /* isSupported now deprecated...
         if (!mSession.isSupported(mDefaultConfig)) {
             Toast.makeText(this, "This device does not support AR", Toast.LENGTH_LONG).show();
@@ -342,7 +344,22 @@ public class MainActivity extends AppCompatActivity implements GLSurfaceView.Ren
             mInterface.pointcloudData = pointCloudDataFromARCoreSessionFrame(mSession, frame);
 
             // Set the data.
-            this.runOnUiThread(mRunnable);
+            //this.runOnUiThread(mRunnable);
+            final Handler mainHandler = new Handler(Looper.getMainLooper());
+            final Runnable r = new Runnable(){
+                @Override
+                public void run() {
+                    mWebView.evaluateJavascript(
+                            // Only set data if getVRDisplays has been called.
+                            "javascript:"
+                                    + "if(window.getVRDisplaysPromise){"
+                                    + "window.WebARonARCoreSetData(" + mInterface.jsonData + ");"
+                                    + "window.WebARonARCore.postMessage('arDataWasUsed:');"
+                                    + "}",
+                            null);
+                }
+            };
+            mainHandler.postAtFrontOfQueue(r);
             mDrawThisFrame = frame;
         } catch (Throwable t) {
             // Avoid crashing the application due to unhandled exceptions.
@@ -409,38 +426,53 @@ public class MainActivity extends AppCompatActivity implements GLSurfaceView.Ren
     private String jsonDataFromARCoreSessionFrame(Session session, Frame frame, float fNear, float fFar) {
         String anchorsString = "";
         float[] m = {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0};
-        for (Plane plane : session.getAllTrackables(Plane.class)) { // changed in 1.0... getAllPlanes()) {
-            int id = plane.hashCode();
-            Pose pose = plane.getCenterPose();
-            pose.toMatrix(m, 0);
-            StringBuffer verticesJSON = new StringBuffer();
-            float[] vertices = plane.getPolygon() /* changed in 1.0... getPlanePolygon() */.array();
-            for (int i=0; i<vertices.length; i+=2) {
-                float x = vertices[i];
-                float y = 0;
-                float z = vertices[i+1];
-                if (verticesJSON.length() == 0) {
-                    verticesJSON.append(String.format("%f,%f,%f", x, y, z));
-                } else {
-                    verticesJSON.append(String.format(",%f,%f,%f", x, y, z));
-                }
+        for (Trackable t : session.getAllTrackables(Trackable.class)) { // changed in 1.0... getAllPlanes()) {
+
+            if (t instanceof AugmentedImage) {
+                AugmentedImage image = (AugmentedImage)t;
+                // TBD
             }
-            anchorsString += String.format(
-                    "%s{\"modelMatrix\":[%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f]" +
-                            ",\"identifier\":%d" +
-                            ",\"alignment\":%d" +
-                            ",\"timestamp\":%d" +
-                            ",\"vertices\":[%s]" +
-                            ",\"extent\":[%f,%f]}",
-                    anchorsString.length() > 0 ? "," : "",
-                    m[0], m[1], m[2], m[3], m[4], m[5], m[6], m[7],
-                    m[8], m[9], m[10], m[11], m[12], m[13], m[14], m[15],
-                    id,
-                    plane.getType() == Plane.Type.HORIZONTAL_UPWARD_FACING ? 0 : -1,
-                    planeTimestamps.get(id),
-                    verticesJSON,
-                    plane.getExtentX(),
-                    plane.getExtentZ());
+            else
+            if (t instanceof Point) {
+                Point point = (Point)t;
+                // TBD
+            }
+            else
+            if (t instanceof Plane) {
+                Plane plane = (Plane) t;
+                int id = plane.hashCode();
+                Pose pose = plane.getCenterPose();
+                pose.toMatrix(m, 0);
+                StringBuffer verticesJSON = new StringBuffer();
+                float[] vertices = plane.getPolygon() /* changed in 1.0... getPlanePolygon() */.array();
+                for (int i = 0; i < vertices.length; i += 2) {
+                    float x = vertices[i];
+                    float y = 0;
+                    float z = vertices[i + 1];
+                    if (verticesJSON.length() == 0) {
+                        verticesJSON.append(String.format("%f,%f,%f", x, y, z));
+                    } else {
+                        verticesJSON.append(String.format(",%f,%f,%f", x, y, z));
+                    }
+                }
+                anchorsString += String.format(
+                        "%s{\"modelMatrix\":[%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f]" +
+                                ",\"identifier\":%d" +
+                                ",\"alignment\":%d" +
+                                ",\"timestamp\":%d" +
+                                ",\"vertices\":[%s]" +
+                                ",\"extent\":[%f,%f]}",
+                        anchorsString.length() > 0 ? "," : "",
+                        m[0], m[1], m[2], m[3], m[4], m[5], m[6], m[7],
+                        m[8], m[9], m[10], m[11], m[12], m[13], m[14], m[15],
+                        id,
+                        plane.getType() == Plane.Type.HORIZONTAL_UPWARD_FACING ? 0 : -1,
+                        planeTimestamps.get(id),
+                        verticesJSON,
+                        plane.getExtentX(),
+                        plane.getExtentZ());
+            }
+
         }
 
         Pose pose = frame.getCamera()./*getDisplayOrientedPose()*/getPose(); // for 1.0, this is from camera (?)
